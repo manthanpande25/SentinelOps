@@ -8,6 +8,7 @@ import morgan from "morgan";
 import connectDB from "./config/database.js";
 import healthRoutes from "./routes/healthRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import applicationRoutes from "./routes/applicationRoutes.js";
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ app.use(morgan("dev"));
 // API routes
 app.use("/api/v1/health", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/applications", applicationRoutes);
 
 // Start server
 const startServer = async () => {
