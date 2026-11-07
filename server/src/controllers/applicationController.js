@@ -11,14 +11,16 @@ export const createApplication = async (req, res) => {
     if (!name || !technology) {
       return res.status(400).json({
         success: false,
-        message: "Application name and technology are required."
+        message: "Application name and technology are required.",
       });
     }
 
-    // Generate a secure API key
-    const apiKey = `sentinel_${crypto.randomBytes(32).toString("hex")}`;
+    const apiKeyPrefix = crypto.randomBytes(8).toString("hex");
 
-    // Hash the API key before storing it
+    const secret = crypto.randomBytes(32).toString("hex");
+
+    const apiKey = `sentinel_${apiKeyPrefix}_${secret}`;
+
     const apiKeyHash = await bcrypt.hash(apiKey, 12);
 
     // Save application in MongoDB
@@ -27,9 +29,9 @@ export const createApplication = async (req, res) => {
       name,
       environment,
       technology,
-      apiKeyHash
+      apiKeyPrefix,
+      apiKeyHash,
     });
-
     // Send API key only once
     res.status(201).json({
       success: true,
@@ -40,17 +42,16 @@ export const createApplication = async (req, res) => {
         environment: application.environment,
         technology: application.technology,
         isActive: application.isActive,
-        createdAt: application.createdAt
+        createdAt: application.createdAt,
       },
-      apiKey
+      apiKey,
     });
-
   } catch (error) {
     console.error("Create application error:", error);
 
     res.status(500).json({
       success: false,
-      message: "Failed to create application."
+      message: "Failed to create application.",
     });
   }
 };
@@ -59,21 +60,22 @@ export const createApplication = async (req, res) => {
 export const getApplications = async (req, res) => {
   try {
     const applications = await Application.find({
-      userId: req.userId
-    }).select("-apiKeyHash").sort({ createdAt: -1 });
+      userId: req.userId,
+    })
+      .select("-apiKeyHash")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
       count: applications.length,
-      applications
+      applications,
     });
-
   } catch (error) {
     console.error("Get applications error:", error);
 
     res.status(500).json({
       success: false,
-      message: "Failed to fetch applications."
+      message: "Failed to fetch applications.",
     });
   }
 };
@@ -85,34 +87,33 @@ export const getApplicationById = async (req, res) => {
 
     const application = await Application.findOne({
       _id: id,
-      userId: req.userId
+      userId: req.userId,
     });
 
     if (!application) {
       return res.status(404).json({
         success: false,
-        message: "Application not found."
+        message: "Application not found.",
       });
     }
 
     res.status(200).json({
       success: true,
-      application
+      application,
     });
-
   } catch (error) {
     console.error("Get application error:", error);
 
     if (error.name === "CastError") {
       return res.status(400).json({
         success: false,
-        message: "Invalid application ID."
+        message: "Invalid application ID.",
       });
     }
 
     res.status(500).json({
       success: false,
-      message: "Failed to fetch application."
+      message: "Failed to fetch application.",
     });
   }
 };
@@ -134,7 +135,7 @@ export const updateApplication = async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({
         success: false,
-        message: "No valid fields provided for update."
+        message: "No valid fields provided for update.",
       });
     }
 
@@ -142,50 +143,49 @@ export const updateApplication = async (req, res) => {
     const application = await Application.findOneAndUpdate(
       {
         _id: id,
-        userId: req.userId
+        userId: req.userId,
       },
       {
-        $set: updates
+        $set: updates,
       },
       {
         new: true,
-        runValidators: true
-      }
+        runValidators: true,
+      },
     );
 
     if (!application) {
       return res.status(404).json({
         success: false,
-        message: "Application not found."
+        message: "Application not found.",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Application updated successfully.",
-      application
+      application,
     });
-
   } catch (error) {
     console.error("Update application error:", error);
 
     if (error.name === "CastError") {
       return res.status(400).json({
         success: false,
-        message: "Invalid application ID."
+        message: "Invalid application ID.",
       });
     }
 
     if (error.name === "ValidationError") {
       return res.status(400).json({
         success: false,
-        message: error.message
+        message: error.message,
       });
     }
 
     res.status(500).json({
       success: false,
-      message: "Failed to update application."
+      message: "Failed to update application.",
     });
   }
 };
@@ -197,34 +197,92 @@ export const deleteApplication = async (req, res) => {
 
     const application = await Application.findOneAndDelete({
       _id: id,
-      userId: req.userId
+      userId: req.userId,
     });
 
     if (!application) {
       return res.status(404).json({
         success: false,
-        message: "Application not found."
+        message: "Application not found.",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: "Application deleted successfully."
+      message: "Application deleted successfully.",
     });
-
   } catch (error) {
     console.error("Delete application error:", error);
 
     if (error.name === "CastError") {
       return res.status(400).json({
         success: false,
-        message: "Invalid application ID."
+        message: "Invalid application ID.",
       });
     }
 
     res.status(500).json({
       success: false,
-      message: "Failed to delete application."
+      message: "Failed to delete application.",
+    });
+  }
+};
+
+// Rotate application API key
+export const rotateApiKey = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const apiKeyPrefix = crypto.randomBytes(8).toString("hex");
+
+    const secret = crypto.randomBytes(32).toString("hex");
+
+    const apiKey = `sentinel_${apiKeyPrefix}_${secret}`;
+
+    const apiKeyHash = await bcrypt.hash(apiKey, 12);
+
+    // Replace the existing API key hash
+    const application = await Application.findOneAndUpdate(
+      {
+        _id: id,
+        userId: req.userId,
+      },
+      {
+        $set: {
+          apiKeyHash,
+          apiKeyPrefix,
+        },
+      },
+      {
+        new: true,
+      },
+    );
+
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: "Application not found.",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "API key rotated successfully.",
+      apiKey,
+    });
+  } catch (error) {
+    console.error("API key rotation error:", error);
+
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid application ID.",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to rotate API key.",
     });
   }
 };

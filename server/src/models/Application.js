@@ -7,48 +7,52 @@ const applicationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true
+      index: true,
     },
 
     // Application details
     name: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
 
     environment: {
       type: String,
       enum: ["development", "staging", "production"],
-      default: "development"
+      default: "development",
     },
 
     technology: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
 
     // Store only the hashed API key
     apiKeyHash: {
       type: String,
       required: true,
-      select: false
+      select: false,
+    },
+
+    apiKeyPrefix: {
+      type: String, 
+      required: true,
+      unique: true,
+      index: true,
     },
 
     isActive: {
       type: Boolean,
-      default: true
-    }
+      default: true,
+    },
   },
   {
-    timestamps: true
-  }
+    timestamps: true,
+  },
 );
 
-const Application = mongoose.model(
-  "Application",
-  applicationSchema
-);
+const Application = mongoose.model("Application", applicationSchema);
 
 export default Application;
