@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import http from "http";
+import { initializeSocket } from "./sockets/socket.js";
 
 import connectDB from "./config/database.js";
 import healthRoutes from "./routes/healthRoutes.js";
@@ -11,6 +13,7 @@ import authRoutes from "./routes/authRoutes.js";
 import applicationRoutes from "./routes/applicationRoutes.js";
 import logRoutes from "./routes/logRoutes.js";
 import incidentRoutes from "./routes/incidentRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 
 dotenv.config();
 
@@ -28,6 +31,7 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/applications", applicationRoutes);
 app.use("/api/v1/logs", logRoutes);
 app.use("/api/v1/incidents", incidentRoutes);
+app.use("/api/v1/ai", aiRoutes);
 
 // Start server
 const startServer = async () => {
@@ -36,9 +40,14 @@ const startServer = async () => {
 
     const PORT = process.env.PORT || 5000;
 
-    app.listen(PORT, () => {
-      console.log(`SentinelOps running on port ${PORT}`);
-    });
+    const httpServer = http.createServer(app);
+
+initializeSocket(httpServer);
+
+httpServer.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log("Socket.IO initialized successfully");
+});
   } catch (error) {
     console.error("Server startup failed:", error.message);
     process.exit(1);

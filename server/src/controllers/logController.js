@@ -1,6 +1,7 @@
 import Log from "../models/Log.js";
 import Application from "../models/Application.js";
 import { processLogForIncident } from "../services/detectionService.js";
+import { getIO } from "../sockets/socket.js";
 
 export const ingestLog = async (req, res) => {
   try {
@@ -82,6 +83,26 @@ export const ingestLog = async (req, res) => {
       message: "Failed to ingest log.",
     });
   }
+  // Send real-time incident update
+if (incident) {
+  try {
+    getIO()
+      .to(`application:${incident.applicationId}`)
+      .emit("incident:updated", {
+        incidentId: incident._id,
+        applicationId: incident.applicationId,
+        title: incident.title,
+        errorType: incident.errorType,
+        severity: incident.severity,
+        status: incident.status,
+        occurrenceCount: incident.occurrenceCount,
+        firstSeen: incident.firstSeen,
+        lastSeen: incident.lastSeen
+      });
+  } catch (socketError) {
+    console.error("Socket notification failed:", socketError.message);
+  }
+}
 };
 
 export const getLogs = async (req, res) => {
