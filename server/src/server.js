@@ -10,6 +10,7 @@ import healthRoutes from "./routes/healthRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import applicationRoutes from "./routes/applicationRoutes.js";
 import logRoutes from "./routes/logRoutes.js";
+import incidentRoutes from "./routes/incidentRoutes.js";
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use("/api/v1/health", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/applications", applicationRoutes);
 app.use("/api/v1/logs", logRoutes);
+app.use("/api/v1/incidents", incidentRoutes);
 
 // Start server
 const startServer = async () => {

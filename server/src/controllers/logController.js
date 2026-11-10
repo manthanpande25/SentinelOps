@@ -1,6 +1,6 @@
-
 import Log from "../models/Log.js";
 import Application from "../models/Application.js";
+import { processLogForIncident } from "../services/detectionService.js";
 
 export const ingestLog = async (req, res) => {
   try {
@@ -11,22 +11,16 @@ export const ingestLog = async (req, res) => {
       stackTrace,
       source,
       request,
-      timestamp
+      timestamp,
     } = req.body;
 
     // Validate required fields
-    const allowedLevels = [
-      "DEBUG",
-      "INFO",
-      "WARN",
-      "ERROR",
-      "FATAL"
-    ];
+    const allowedLevels = ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"];
 
     if (!level || !allowedLevels.includes(level)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid log level."
+        message: "Invalid log level.",
       });
     }
 
@@ -37,7 +31,7 @@ export const ingestLog = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: "A valid log message is required."
+        message: "A valid log message is required.",
       });
     }
 
@@ -48,7 +42,7 @@ export const ingestLog = async (req, res) => {
     if (Number.isNaN(logTimestamp.getTime())) {
       return res.status(400).json({
         success: false,
-        message: "Invalid timestamp."
+        message: "Invalid timestamp.",
       });
     }
 
@@ -61,13 +55,23 @@ export const ingestLog = async (req, res) => {
       stackTrace,
       source,
       request,
-      timestamp: logTimestamp
+      timestamp: logTimestamp,
     });
+
+    // Automatically detect and create/update incidents
+    let incident = null;
+
+    try {
+      incident = await processLogForIncident(log);
+    } catch (detectionError) {
+      console.error("Incident detection failed:", detectionError);
+    }
 
     return res.status(201).json({
       success: true,
       message: "Log ingested successfully.",
-      logId: log._id
+      logId: log._id,
+      incidentId: incident?._id || null,
     });
 
   } catch (error) {
@@ -75,32 +79,26 @@ export const ingestLog = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Failed to ingest log."
+      message: "Failed to ingest log.",
     });
   }
 };
 
-
 export const getLogs = async (req, res) => {
   try {
-    const {
-      level,
-      search,
-      page = 1,
-      limit = 20
-    } = req.query;
+    const { level, search, page = 1, limit = 20 } = req.query;
 
     // Build query using authenticated user's applications
     const Application = (await import("../models/Application.js")).default;
 
     const applications = await Application.find({
-      userId: req.userId
+      userId: req.userId,
     }).select("_id");
 
-    const applicationIds = applications.map(app => app._id);
+    const applicationIds = applications.map((app) => app._id);
 
     const filter = {
-      applicationId: { $in: applicationIds }
+      applicationId: { $in: applicationIds },
     };
 
     // Filter by log level
@@ -110,7 +108,7 @@ export const getLogs = async (req, res) => {
       if (!allowedLevels.includes(level)) {
         return res.status(400).json({
           success: false,
-          message: "Invalid log level."
+          message: "Invalid log level.",
         });
       }
 
@@ -121,7 +119,7 @@ export const getLogs = async (req, res) => {
     if (search) {
       filter.message = {
         $regex: search,
-        $options: "i"
+        $options: "i",
       };
     }
 
@@ -131,12 +129,9 @@ export const getLogs = async (req, res) => {
     const skip = (currentPage - 1) * pageSize;
 
     const [logs, total] = await Promise.all([
-      Log.find(filter)
-        .sort({ timestamp: -1 })
-        .skip(skip)
-        .limit(pageSize),
+      Log.find(filter).sort({ timestamp: -1 }).skip(skip).limit(pageSize),
 
-      Log.countDocuments(filter)
+      Log.countDocuments(filter),
     ]);
 
     return res.status(200).json({
@@ -145,42 +140,40 @@ export const getLogs = async (req, res) => {
       page: currentPage,
       limit: pageSize,
       totalPages: Math.ceil(total / pageSize),
-      logs
+      logs,
     });
-
   } catch (error) {
     console.error("Get logs error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch logs."
+      message: "Failed to fetch logs.",
     });
   }
 };
-
 
 export const getLogStats = async (req, res) => {
   try {
     // Find applications owned by logged-in user
     const applications = await Application.find({
-      userId: req.userId
+      userId: req.userId,
     }).select("_id");
 
-    const applicationIds = applications.map(app => app._id);
+    const applicationIds = applications.map((app) => app._id);
 
     // Group logs by severity
     const stats = await Log.aggregate([
       {
         $match: {
-          applicationId: { $in: applicationIds }
-        }
+          applicationId: { $in: applicationIds },
+        },
       },
       {
         $group: {
           _id: "$level",
-          count: { $sum: 1 }
-        }
-      }
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
     // Initialize all severity counts
@@ -190,26 +183,25 @@ export const getLogStats = async (req, res) => {
       INFO: 0,
       WARN: 0,
       ERROR: 0,
-      FATAL: 0
+      FATAL: 0,
     };
 
     // Fill counts from MongoDB results
-    stats.forEach(item => {
+    stats.forEach((item) => {
       result[item._id] = item.count;
       result.totalLogs += item.count;
     });
 
     return res.status(200).json({
       success: true,
-      stats: result
+      stats: result,
     });
-
   } catch (error) {
     console.error("Log statistics error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch log statistics."
+      message: "Failed to fetch log statistics.",
     });
   }
 };
