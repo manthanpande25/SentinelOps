@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import useSocket from "../hooks/useSocket";
 import {
   Activity,
   AlertTriangle,
@@ -92,6 +93,8 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const token = localStorage.getItem("sentinel_token");
+const { latestIncident } = useSocket(token);
 
   const fetchDashboardData = useCallback(async (manual = false) => {
     if (manual) {
@@ -128,6 +131,13 @@ function Dashboard() {
       setRefreshing(false);
     }
   }, []);
+
+  useEffect(() => {
+  if (latestIncident) {
+    console.log("New real-time incident:", latestIncident);
+    fetchDashboardData();
+  }
+}, [latestIncident, fetchDashboardData]);
 
   useEffect(() => {
     fetchDashboardData();

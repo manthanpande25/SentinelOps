@@ -3,6 +3,7 @@ import Application from "../models/Application.js";
 import { processLogForIncident } from "../services/detectionService.js";
 import { getIO } from "../sockets/socket.js";
 
+
 export const ingestLog = async (req, res) => {
   try {
     const {
@@ -36,7 +37,7 @@ export const ingestLog = async (req, res) => {
       });
     }
 
-    // Validate optional timestamp
+    // Validate timestamp
     const logTimestamp =
       timestamp === undefined ? new Date() : new Date(timestamp);
 
@@ -59,7 +60,7 @@ export const ingestLog = async (req, res) => {
       timestamp: logTimestamp,
     });
 
-    // Automatically detect and create/update incidents
+    // Detect and create/update incidents
     let incident = null;
 
     try {
@@ -68,6 +69,37 @@ export const ingestLog = async (req, res) => {
       console.error("Incident detection failed:", detectionError);
     }
 
+    // Send real-time incident update
+    if (incident) {
+      try {
+        console.log("Emitting incident update:", {
+          incidentId: incident._id,
+          applicationId: incident.applicationId,
+        });
+
+        getIO()
+          .to(`application:${incident.applicationId}`)
+          .emit("incident:updated", {
+            incidentId: incident._id,
+            applicationId: incident.applicationId,
+            title: incident.title,
+            errorType: incident.errorType,
+            severity: incident.severity,
+            status: incident.status,
+            occurrenceCount: incident.occurrenceCount,
+            firstSeen: incident.firstSeen,
+            lastSeen: incident.lastSeen,
+          });
+
+      } catch (socketError) {
+        console.error(
+          "Socket notification failed:",
+          socketError.message
+        );
+      }
+    }
+
+    // Send HTTP response after attempting notification
     return res.status(201).json({
       success: true,
       message: "Log ingested successfully.",
@@ -83,27 +115,8 @@ export const ingestLog = async (req, res) => {
       message: "Failed to ingest log.",
     });
   }
-  // Send real-time incident update
-if (incident) {
-  try {
-    getIO()
-      .to(`application:${incident.applicationId}`)
-      .emit("incident:updated", {
-        incidentId: incident._id,
-        applicationId: incident.applicationId,
-        title: incident.title,
-        errorType: incident.errorType,
-        severity: incident.severity,
-        status: incident.status,
-        occurrenceCount: incident.occurrenceCount,
-        firstSeen: incident.firstSeen,
-        lastSeen: incident.lastSeen
-      });
-  } catch (socketError) {
-    console.error("Socket notification failed:", socketError.message);
-  }
-}
 };
+
 
 export const getLogs = async (req, res) => {
   try {
