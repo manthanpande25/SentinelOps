@@ -60,6 +60,26 @@ export const ingestLog = async (req, res) => {
       timestamp: logTimestamp,
     });
 
+    // Broadcast newly ingested log to its application room
+try {
+  getIO()
+    .to(`application:${log.applicationId}`)
+    .emit("log:created", {
+      logId: log._id,
+      applicationId: log.applicationId,
+      level: log.level,
+      message: log.message,
+      errorType: log.errorType,
+      stackTrace: log.stackTrace,
+      source: log.source,
+      request: log.request,
+      timestamp: log.timestamp,
+      createdAt: log.createdAt,
+    });
+} catch (socketError) {
+  console.error("Log notification failed:", socketError.message);
+}
+
     // Detect and create/update incidents
     let incident = null;
 
@@ -163,7 +183,7 @@ export const getLogs = async (req, res) => {
     const skip = (currentPage - 1) * pageSize;
 
     const [logs, total] = await Promise.all([
-      Log.find(filter).sort({ timestamp: -1 }).skip(skip).limit(pageSize),
+      Log.find(filter).sort({ createdAt: -1 })  .skip(skip).limit(pageSize),
 
       Log.countDocuments(filter),
     ]);
